@@ -1,0 +1,17 @@
+# MFSSIA for the prescription agent experiment. DKG runs separately from dkg-node/dkg-local (its own compose project),
+# reached through the host ports 8900/8545.
+services:
+  app:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      PILOT_DEMO_SEED: "true"
+      EVIDENCE_REFERENCE_TIME: "2026-10-10T00:00:00Z"
+      DKG_HOSTNAME: http://host.docker.internal
+      DKG_PORT: 8900
+      DKG_BLOCKCHAIN_NAME: hardhat1:31337
+      DKG_BLOCKCHAIN_RPC: http://host.docker.internal:8545
+      DKG_ENVIRONMENT: development
+      # Hardhat deterministic account #0 — public, local use only.
+      PUBLIC_KEY: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
