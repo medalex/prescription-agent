@@ -188,7 +188,7 @@ public class AgentLoopTests
     {
         var (result, adapter) = await Run("B", [
             ScriptedAdapter.Call("get_evidence", new GetEvidenceArgs("lab-b", "lab:eGFR")),
-            ScriptedAdapter.Call("submit_decision", new { Decision = "escalate", Rationale = "x" }),
+            ScriptedAdapter.Call("submit_decision", new { Decision = "escalate", Rationale = "x", Blocking = new[] { "lab:eGFR" } }),
         ]);
         Assert.Equal("[]", ToolResults(adapter.Results[0])[0].Content);
         Assert.Equal("access_denied", result.MfssiaResponses[0].Reason); // the harness still keeps the real answer
@@ -210,8 +210,8 @@ public class AgentLoopTests
     public async Task Declaration_is_required_in_c2_and_c3()
     {
         var (result, adapter) = await Run("C3", [
-            ScriptedAdapter.Call("submit_decision", new { Decision = "escalate", Rationale = "x" }),
-            ScriptedAdapter.Call("submit_decision", new { Decision = "escalate", Rationale = "x", Declaration = Array.Empty<object>(), ReliedOn = Array.Empty<string>(), Missing = Array.Empty<string>() }),
+            ScriptedAdapter.Call("submit_decision", new { Decision = "escalate", Rationale = "x", Blocking = new[] { "lab:eGFR" } }),
+            ScriptedAdapter.Call("submit_decision", new { Decision = "escalate", Rationale = "x", Blocking = new[] { "lab:eGFR" }, Declaration = Array.Empty<object>(), ReliedOn = Array.Empty<string>(), Missing = Array.Empty<string>() }),
         ]);
         Assert.True(ToolResults(adapter.Results[0])[0].IsError); // first submission rejected as a tool error
         Assert.NotNull(result.Decision);
