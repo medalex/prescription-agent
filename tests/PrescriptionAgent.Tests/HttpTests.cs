@@ -32,6 +32,20 @@ public sealed class ScriptedHandler(params (HttpStatusCode Status, string Body)[
     }
 }
 
+/// <summary>Throws the given error on the first request, then passes requests to the inner handler; with no inner handler it always throws.</summary>
+public sealed class FailingOnceHandler(Exception error, ScriptedHandler? then) : HttpMessageHandler
+{
+    public int Failures { get; private set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        if (then is not null && Failures > 0)
+            return new HttpMessageInvoker(then).SendAsync(request, cancellationToken);
+        Failures++;
+        throw error;
+    }
+}
+
 public class MfssiaClientTests
 {
     private static string Envelope(object data) =>
@@ -88,7 +102,7 @@ public class OpenAICompatAdapterTests
 
     private static object TextMessage(string content) => new { role = "assistant", content };
 
-    private static OpenAICompatAdapter Make(ScriptedHandler handler, double? temperature = 0)
+    private static OpenAICompatAdapter Make(HttpMessageHandler handler, double? temperature = 0)
     {
         var options = new PrescriptionAgentOptions { OpenAi = new() { BaseUrl = "https://api.example.test/v1" }, Run = new() { Temperature = temperature } };
         return new OpenAICompatAdapter("test-model", options, TestHost.Json, TestHost.Arguments, handler) { Sleep = _ => Task.CompletedTask };
@@ -99,7 +113,7 @@ public class OpenAICompatAdapterTests
     {
         var handler = new ScriptedHandler(
             (HttpStatusCode.OK, Completion(ToolCallMessage("tool-1", "get_policy", """{"drug":"metformin"}"""))),
-            (HttpStatusCode.OK, Completion(ToolCallMessage("tool-2", "submit_decision", """{"decision":"escalate","rationale":"Insufficient evidence"}"""))));
+            (HttpStatusCode.OK, Completion(ToolCallMessage("tool-2", "submit_decision", """{"decision":"escalate","rationale":"Insufficient evidence","blocking":["allergies"]}"""))));
         var adapter = Make(handler);
         var result = await TestHost.Agent(new FakeMfssia(Data)).RunAsync(Condition.All["C1"], Data.GetTask("diabetes"), Data.GetPatient("P2"), adapter,
             "openai-test", Transcript.None);
@@ -129,7 +143,7 @@ public class OpenAICompatAdapterTests
     {
         var handler = new ScriptedHandler(
             (HttpStatusCode.OK, Completion(ToolCallMessage("bad-call", "get_policy", """{"drug":"""))),
-            (HttpStatusCode.OK, Completion(ToolCallMessage("decision", "submit_decision", """{"decision":"escalate","rationale":"Invalid request was rejected"}"""))));
+            (HttpStatusCode.OK, Completion(ToolCallMessage("decision", "submit_decision", """{"decision":"escalate","rationale":"Invalid request was rejected","blocking":[]}"""))));
         var adapter = Make(handler);
         var result = await TestHost.Agent(new FakeMfssia(Data)).RunAsync(Condition.All["C1"], Data.GetTask("diabetes"), Data.GetPatient("P2"), adapter,
             "bad-json-test", Transcript.None);
@@ -186,6 +200,34 @@ public class OpenAICompatAdapterTests
 
         Assert.Equal("ready", turn.Text);
         Assert.Equal([1], sleeps);
+    }
+
+    [Fact]
+    public async Task Network_error_is_retried()
+    {
+        var handler = new FailingOnceHandler(new HttpRequestException("connection reset"),
+            new ScriptedHandler((HttpStatusCode.OK, Completion(TextMessage("ready"), "stop"))));
+        var adapter = Make(handler);
+        var sleeps = new List<int>();
+        adapter.Sleep = attempt => { sleeps.Add(attempt); return Task.CompletedTask; };
+        adapter.Start("s", "u", []);
+
+        var turn = await adapter.StepAsync();
+
+        Assert.Equal("ready", turn.Text);
+        Assert.Equal([1], sleeps);
+    }
+
+    [Fact]
+    public async Task Repeated_timeouts_end_as_model_api_error()
+    {
+        var handler = new FailingOnceHandler(new TaskCanceledException("timeout"), null);
+        var adapter = Make(handler);
+        adapter.Sleep = _ => Task.CompletedTask;
+        adapter.Start("s", "u", []);
+
+        await Assert.ThrowsAsync<ModelApiException>(adapter.StepAsync);
+        Assert.Equal(OpenAICompatAdapter.MaxRetryAttempts, handler.Failures);
     }
 
     [Fact]

@@ -21,8 +21,9 @@ namespace PrescriptionAgent.Adapters;
 ///   (this API has no is_error);
 /// - tool arguments arrive as a JSON string; malformed JSON is answered by the agent loop as an invalid input;
 /// - temperature is sent if configured; an HTTP 400 is retried once without it and recorded in Settings;
-/// - HTTP 429 and a 200 without choices (a provider error some gateways send) are retried with exponential backoff,
-///   up to 5 attempts in all (free tiers); then ModelApiException. A used-up daily quota throws ModelQuotaExceededException at once.
+/// - HTTP 429, a 200 without choices (a provider error some gateways send) and a network error or timeout are retried
+///   with exponential backoff, up to 5 attempts in all (free tiers); then ModelApiException. A used-up daily quota throws
+///   ModelQuotaExceededException at once.
 /// Settings: PrescriptionAgentOptions.OpenAi.BaseUrl (required), OpenAi.ApiKey (default "none"), Run.Temperature.
 /// </summary>
 public sealed class OpenAICompatAdapter : IModelAdapter
@@ -82,7 +83,10 @@ public sealed class OpenAICompatAdapter : IModelAdapter
         return (response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 
-    /// <summary>Posts the conversation; retries a 429 or a response without choices with backoff, and a 400 once without temperature.</summary>
+    /// <summary>
+    /// Posts the conversation; retries a 429, a response without choices or a network error with backoff,
+    /// and a 400 once without temperature.
+    /// </summary>
     /// <returns>The response text and its first choice.</returns>
     private async Task<(string Text, ChatChoice Choice)> PostWithRetriesAsync()
     {
@@ -90,25 +94,34 @@ public sealed class OpenAICompatAdapter : IModelAdapter
         var attempt = 0;
         while (true)
         {
-            var (status, text) = await PostAsync(new ChatRequest(ModelId, Messages, _tools, Temperature: withTemperature ? _temperature : null));
-            if (status == HttpStatusCode.BadRequest && withTemperature)
+            string problem, detail;
+            try
             {
-                withTemperature = false;
-                _temperature = null;
-                _settings["temperature"] = "rejected by model; not applied";
-                continue;
+                var (status, text) = await PostAsync(new ChatRequest(ModelId, Messages, _tools, Temperature: withTemperature ? _temperature : null));
+                if (status == HttpStatusCode.BadRequest && withTemperature)
+                {
+                    withTemperature = false;
+                    _temperature = null;
+                    _settings["temperature"] = "rejected by model; not applied";
+                    continue;
+                }
+                if (status == HttpStatusCode.TooManyRequests && IsDailyQuotaExceeded(text))
+                    throw new ModelQuotaExceededException($"daily request quota of {BaseUrl} is used up: {text}");
+                if (status != HttpStatusCode.TooManyRequests && (int)status is < 200 or >= 300)
+                    throw new ModelApiException($"{(int)status} from {BaseUrl}: {text}");
+                if (status != HttpStatusCode.TooManyRequests && FindFirstChoice(text) is { } choice)
+                    return (text, choice);
+                (problem, detail) = (status == HttpStatusCode.TooManyRequests ? "429" : "a response without choices", text);
             }
-            if (status == HttpStatusCode.TooManyRequests && IsDailyQuotaExceeded(text))
-                throw new ModelQuotaExceededException($"daily request quota of {BaseUrl} is used up: {text}");
-            if (status != HttpStatusCode.TooManyRequests && (int)status is < 200 or >= 300)
-                throw new ModelApiException($"{(int)status} from {BaseUrl}: {text}");
-            if (status != HttpStatusCode.TooManyRequests && FindFirstChoice(text) is { } choice)
-                return (text, choice);
+            catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+            {
+                // TaskCanceledException is HttpClient's timeout; the harness never cancels a request itself.
+                (problem, detail) = ("a network error", $"{error.GetType().Name}: {error.Message}");
+            }
 
             attempt++;
-            var problem = status == HttpStatusCode.TooManyRequests ? "429" : "a response without choices";
             if (attempt >= MaxRetryAttempts)
-                throw new ModelApiException($"{problem} from {BaseUrl} after {attempt} attempts: {text}");
+                throw new ModelApiException($"{problem} from {BaseUrl} after {attempt} attempts: {detail}");
             await Sleep(attempt);
         }
     }

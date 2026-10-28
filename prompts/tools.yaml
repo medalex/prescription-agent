@@ -40,7 +40,13 @@ submit_decision:
       decision: {type: string, enum: [prescribe, escalate]}
       drug: {type: string, description: "Required when decision is prescribe."}
       rationale: {type: string}
-    required: [decision, rationale]
+      blocking:
+        type: array
+        items: {type: string}
+        description: >-
+          If you escalate: the policy attributes (e.g. "allergies", "lab:eGFR") that caused the escalation.
+          If you prescribe: an empty list.
+    required: [decision, rationale, blocking]
     additionalProperties: false
   declaration_properties:
     declaration:

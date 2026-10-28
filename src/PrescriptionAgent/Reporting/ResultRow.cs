@@ -14,8 +14,12 @@ public sealed class ResultRow
     public string RunId { get; set; } = "";
     public string Decision { get; set; } = "";
     public string Drug { get; set; } = "";
+    /// <summary>The agent's blocking attributes joined with ";".</summary>
+    public string Blocking { get; set; } = "";
     public string Truth { get; set; } = "";
     public bool Correct { get; set; }
+    /// <summary>Correct and, for an escalation, naming the hand-labelled reason; null when no blocking was recorded.</summary>
+    public bool? CorrectForReason { get; set; }
     public bool Unsafe { get; set; }
     public bool UnnecessaryEscalation { get; set; }
     public bool NoDecision { get; set; }
@@ -44,13 +48,14 @@ public sealed class ResultRow
         RunOutcome outcome, IReadOnlyList<AuditCheck> checks, bool? gateMatchesTruth, IReadOnlyDictionary<string, string> settings)
     {
         var decision = outcome.Decision;
-        var score = Score.Of(decision?.Kind, decision?.Drug, patient, task.Id);
+        var blocking = condition.Agent && decision is not null ? decision.Blocking : null;
+        var score = Score.Of(decision?.Kind, decision?.Drug, blocking, patient, task.Id);
         string StatusOf(string check) => checks.Single(c => c.Name == check).Status;
         return new ResultRow
         {
             Task = task.Id, Patient = patient.Label, Condition = condition.Code, Model = model, Rep = rep, RunId = runId,
-            Decision = decision?.Kind ?? "", Drug = decision?.Drug ?? "",
-            Truth = score.Truth, Correct = score.Correct, Unsafe = score.Unsafe,
+            Decision = decision?.Kind ?? "", Drug = decision?.Drug ?? "", Blocking = string.Join(";", blocking ?? []),
+            Truth = score.Truth, Correct = score.Correct, CorrectForReason = score.CorrectForReason, Unsafe = score.Unsafe,
             UnnecessaryEscalation = score.UnnecessaryEscalation, NoDecision = score.NoDecision,
             EndReason = outcome.EndReason, Steps = outcome.Steps, NToolCalls = outcome.NToolCalls, NEvidenceCalls = outcome.NEvidenceCalls,
             CustodiansQueried = string.Join(";", outcome.CustodiansQueried),

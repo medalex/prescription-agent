@@ -13,7 +13,13 @@ public sealed class ExperimentDataLoader(ExperimentPaths paths, YamlLoader yaml)
     public ExperimentData Load()
     {
         var scenarios = yaml.Load<ScenariosFile>(DataFile("scenarios.yaml"));
-        foreach (var (label, patient) in scenarios.Patients) patient.Label = label;
+        foreach (var (label, patient) in scenarios.Patients)
+        {
+            patient.Label = label;
+            foreach (var (task, truth) in patient.Truth)
+                if (truth == "escalate" && !patient.TruthReason.ContainsKey(task))
+                    throw new InvalidOperationException($"scenarios.yaml: {label}/{task} is labelled escalate but has no truth_reason");
+        }
         return new ExperimentData
         {
             Custodians = yaml.Load<CustodiansFile>(DataFile("custodians.yaml")).Custodians,

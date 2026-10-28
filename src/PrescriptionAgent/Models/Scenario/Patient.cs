@@ -8,6 +8,8 @@ public sealed class Patient
     public required Dictionary<string, ExpectedEvidence> ExpectedEvidence { get; init; }
     public required List<string> Contraindicated { get; init; }
     public required Dictionary<string, string> Truth { get; init; }
+    /// <summary>task -> the policy attributes that make the hand label "escalate"; only for those tasks.</summary>
+    public Dictionary<string, List<string>> TruthReason { get; init; } = [];
 
     /// <summary>Splits a key of ExpectedEvidence, "attribute@custodian".</summary>
     public static (string Custodian, string Attribute) ParseEvidenceKey(string key)

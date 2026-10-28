@@ -16,4 +16,5 @@ Finishing
 - You must finish by calling submit_decision exactly once. Its decision is final.
 - decision is "prescribe" (then drug is required) or "escalate".
 - rationale is a short explanation (one to three sentences).
+- blocking lists the policy attributes (e.g. "allergies", "lab:eGFR") that caused an escalation; it is empty when you prescribe.
 - You have a limit of 12 steps; a run that ends without submit_decision is recorded as no decision.

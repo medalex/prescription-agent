@@ -12,6 +12,8 @@ public static class ResultsCsv
     private static bool ParseBool(string s) => s.Trim().ToLowerInvariant() is "true" or "1";
     private static int ParseInt(string s) => int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
     private static string FormatInt(int v) => v.ToString(CultureInfo.InvariantCulture);
+    private static string FormatOptionalBool(bool? value) => value is { } v ? FormatBool(v) : "";
+    private static bool? ParseOptionalBool(string s) => s == "" ? null : ParseBool(s);
 
     /// <summary>The columns in order, with how each is written and read.</summary>
     private static readonly (string Name, Func<ResultRow, string> Get, Action<ResultRow, string> Set)[] Columns =
@@ -24,8 +26,10 @@ public static class ResultsCsv
         ("runId", r => r.RunId, (r, v) => r.RunId = v),
         ("decision", r => r.Decision, (r, v) => r.Decision = v),
         ("drug", r => r.Drug, (r, v) => r.Drug = v),
+        ("blocking", r => r.Blocking, (r, v) => r.Blocking = v),
         ("truth", r => r.Truth, (r, v) => r.Truth = v),
         ("correct", r => FormatBool(r.Correct), (r, v) => r.Correct = ParseBool(v)),
+        ("correct_for_reason", r => FormatOptionalBool(r.CorrectForReason), (r, v) => r.CorrectForReason = ParseOptionalBool(v)),
         ("unsafe", r => FormatBool(r.Unsafe), (r, v) => r.Unsafe = ParseBool(v)),
         ("unnecessary_escalation", r => FormatBool(r.UnnecessaryEscalation), (r, v) => r.UnnecessaryEscalation = ParseBool(v)),
         ("no_decision", r => FormatBool(r.NoDecision), (r, v) => r.NoDecision = ParseBool(v)),
@@ -39,7 +43,7 @@ public static class ResultsCsv
         ("audit_decision_vs_policy", r => r.AuditDecisionVsPolicy, (r, v) => r.AuditDecisionVsPolicy = v),
         ("audit_fired", r => FormatBool(r.AuditFired), (r, v) => r.AuditFired = ParseBool(v)),
         ("audit_reasons", r => r.AuditReasons, (r, v) => r.AuditReasons = v),
-        ("gate_matches_truth", r => r.GateMatchesTruth is { } g ? FormatBool(g) : "", (r, v) => r.GateMatchesTruth = v == "" ? null : ParseBool(v)),
+        ("gate_matches_truth", r => FormatOptionalBool(r.GateMatchesTruth), (r, v) => r.GateMatchesTruth = ParseOptionalBool(v)),
         ("temperature", r => r.Temperature, (r, v) => r.Temperature = v),
         ("effort", r => r.Effort, (r, v) => r.Effort = v),
         ("base_url", r => r.BaseUrl, (r, v) => r.BaseUrl = v),

@@ -23,8 +23,8 @@ public class RunEndToEndTests
         {
             var first = user.Split("preference: ")[1].Split(',')[0].Trim();
             object submit = system.Contains("declaration", StringComparison.OrdinalIgnoreCase)
-                ? new { Decision = "prescribe", Drug = first, Rationale = "r", Declaration = Array.Empty<object>(), ReliedOn = Array.Empty<string>(), Missing = Array.Empty<string>() }
-                : new { Decision = "prescribe", Drug = first, Rationale = "r" };
+                ? new { Decision = "prescribe", Drug = first, Rationale = "r", Blocking = Array.Empty<string>(), Declaration = Array.Empty<object>(), ReliedOn = Array.Empty<string>(), Missing = Array.Empty<string>() }
+                : new { Decision = "prescribe", Drug = first, Rationale = "r", Blocking = Array.Empty<string>() };
             Turns = new Queue<Turn>([Call("get_evidence", new GetEvidenceArgs("hospital-1", "allergies")), Call("submit_decision", submit)]);
         }
     }
