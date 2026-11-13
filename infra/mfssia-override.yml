@@ -1,5 +1,9 @@
-# MFSSIA for the prescription agent experiment. DKG runs separately from dkg-node/dkg-local (its own compose project),
-# reached through the host ports 8900/8545.
+# MFSSIA for the prescription agent experiment, on DKG V10. The DKG node runs separately from
+# dkg-node/dkg-v10-local (its own compose project), reached through the host port 9200; Postgres comes
+# from MFSSIA's docker-compose.local.yml (migrations run at startup). From the mfssia-ehealth folder:
+#   export DKG_V10_TOKEN=$(grep -v '^#' ../dkg-node/dkg-v10-local/data/auth.token | tr -d '[:space:]')
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml \
+#     -f ../prescription-agent/infra/mfssia-override.yml up -d --build
 services:
   app:
     extra_hosts:
@@ -7,11 +11,8 @@ services:
     environment:
       PILOT_DEMO_SEED: "true"
       EVIDENCE_REFERENCE_TIME: "2026-10-10T00:00:00Z"
-      DKG_HOSTNAME: http://host.docker.internal
-      DKG_PORT: 8900
-      DKG_BLOCKCHAIN_NAME: hardhat1:31337
-      DKG_BLOCKCHAIN_RPC: http://host.docker.internal:8545
-      DKG_ENVIRONMENT: development
-      # Hardhat deterministic account #0 — public, local use only.
-      PUBLIC_KEY: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-      PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+      DKG_V10_URL: http://host.docker.internal:9200
+      # Changes whenever the node is recreated, so it is never written here.
+      DKG_V10_TOKEN: ${DKG_V10_TOKEN:?export DKG_V10_TOKEN (the last line of dkg-v10-local/data/auth.token)}
+      DKG_CONTEXT_GRAPH: mfssia-ehealth
+      DKG_WRITE_MODE: draft
